@@ -1,0 +1,30 @@
+generated/**
+photos/**
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+venv/
+env/
+.venv/
+
+# Environment variables
+.env
+
+# Docker files
+Dockerfile
+.dockerignore
+
+# Logs
+
+*.log
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp

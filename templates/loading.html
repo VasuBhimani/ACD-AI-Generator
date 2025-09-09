@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cloud Computing Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --dark-purple: #1e0045;
+        --main-purple: #a267ff;
+        --light-purple: #d4b9fe;
+        --light-blue: #cae9ee;
+        --accent-orange: #ff6222;
+        --accent-lime: #e4ff7a;
+      }
+
+      body {
+        font-family: "Rajdhani", sans-serif;
+        background-color: var(--dark-purple);
+        background-image: linear-gradient(135deg, var(--dark-purple), #4a288a);
+        margin: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        color: var(--light-purple);
+        text-align: center;
+        overflow: hidden;
+        position: relative;
+      }
+
+      /* --- BACKGROUND ELEMENTS --- */
+      .background-wrapper {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+        pointer-events: none;
+        overflow: hidden;
+        z-index: 0;
+      }
+
+      .hex-background {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="86.6"><polygon points="50,0 100,25 100,75 50,100 0,75 0,25" fill="none" stroke="rgba(162, 103, 255, 0.1)"/></svg>');
+        background-size: 100px 86.6px;
+        animation: pan-background 30s linear infinite;
+      }
+
+      @keyframes pan-background {
+        0% {
+          background-position: 0 0;
+        }
+        100% {
+          background-position: 200px 173.2px;
+        }
+      }
+
+      .data-bit {
+        position: absolute;
+        width: 3px;
+        height: 3px;
+        background-color: var(--accent-lime);
+        border-radius: 50%;
+        box-shadow: 0 0 5px var(--accent-lime);
+        animation: stream 5s infinite linear;
+        opacity: 0;
+      }
+
+      .data-bit:nth-child(1) {
+        top: 10%;
+        animation-delay: 0s;
+        animation-duration: 4.5s;
+      }
+      .data-bit:nth-child(2) {
+        top: 80%;
+        animation-delay: 1.2s;
+        animation-duration: 5.5s;
+      }
+      .data-bit:nth-child(3) {
+        top: 40%;
+        animation-delay: 2.1s;
+        animation-duration: 3.8s;
+      }
+      .data-bit:nth-child(4) {
+        top: 60%;
+        animation-delay: 3.5s;
+        animation-duration: 6s;
+      }
+      .data-bit:nth-child(5) {
+        top: 25%;
+        animation-delay: 4.2s;
+        animation-duration: 4.2s;
+      }
+
+      @keyframes stream {
+        0% {
+          transform: translateX(-10px);
+          opacity: 1;
+        }
+        95% {
+          opacity: 1;
+        }
+        100% {
+          transform: translateX(100vw);
+          opacity: 0;
+        }
+      }
+
+      /* --- MAIN CONTAINER --- */
+      .container {
+        background: rgba(30, 0, 69, 0.5);
+        border-radius: 20px;
+        padding: 40px 50px;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(212, 185, 254, 0.2);
+        position: relative;
+        z-index: 1;
+        width: 90%;
+        max-width: 800px;
+        animation: fadeInScale 1s ease-out, glow-border 4s infinite alternate;
+      }
+
+      @keyframes fadeInScale {
+        from {
+          opacity: 0;
+          transform: scale(0.95);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      @keyframes glow-border {
+        from {
+          border-color: rgba(212, 185, 254, 0.2);
+          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+        to {
+          border-color: rgba(212, 185, 254, 0.6);
+          box-shadow: 0 8px 40px 0 rgba(162, 103, 255, 0.5);
+        }
+      }
+
+      h1 {
+        font-size: 2.8em;
+        font-weight: 700;
+        margin-bottom: 20px;
+        color: var(--accent-orange);
+        letter-spacing: 2px;
+        text-shadow: 0 0 5px rgba(255, 98, 34, 0.3),
+          0 0 15px rgba(255, 98, 34, 0.3);
+      }
+
+      .logo-container {
+        margin: 30px auto;
+        width: 340px; /* <-- INCREASED SIZE */
+        height: 340px; /* <-- INCREASED SIZE */
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        animation: pulse 2.5s infinite ease-in-out;
+        /* background-color: rgba(212, 185, 254, 0.9); */
+        background-color: rgba(202, 198, 210, 0.9);
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+      }
+
+      .logo-container img {
+        width: 310px; /* <-- INCREASED SIZE */
+        height: auto;
+      }
+
+      @keyframes pulse {
+        0% {
+          transform: scale(0.98);
+          box-shadow: 0 0 20px 0px rgba(162, 103, 255, 0.4);
+        }
+        50% {
+          transform: scale(1.02);
+          box-shadow: 0 0 35px 8px rgba(162, 103, 255, 0.7);
+        }
+        100% {
+          transform: scale(0.98);
+          box-shadow: 0 0 20px 0px rgba(162, 103, 255, 0.4);
+        }
+      }
+
+      .progress-bar-container {
+        position: relative;
+        width: 80%;
+        height: 6px;
+        background-color: rgba(0, 0, 0, 0.2);
+        border-radius: 5px;
+        margin: 40px auto;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .scanner-beam {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 40%;
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--main-purple),
+          var(--accent-lime),
+          transparent
+        );
+        border-radius: 5px;
+        box-shadow: 0 0 10px var(--accent-lime);
+        animation: scan 2.5s infinite linear;
+      }
+
+      @keyframes scan {
+        0% {
+          transform: translateX(-100%);
+        }
+        100% {
+          transform: translateX(350%);
+        }
+      }
+
+      p {
+        font-size: 1.3em;
+        font-weight: 500;
+        color: var(--light-blue);
+        margin-top: 20px;
+        letter-spacing: 1px;
+      }
+
+      b {
+        color: var(--accent-lime);
+        font-weight: 700;
+        text-shadow: 0 0 5px var(--accent-lime);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="background-wrapper">
+      <div class="hex-background"></div>
+      <div class="data-bit"></div>
+      <div class="data-bit"></div>
+      <div class="data-bit"></div>
+      <div class="data-bit"></div>
+      <div class="data-bit"></div>
+    </div>
+
+    <div class="container">
+      <h1>Awaiting Network Trigger...</h1>
+      <div class="logo-container">
+        <img src="/static/UG logo1.png" alt="User Group Logo" />
+      </div>
+      <div class="progress-bar-container">
+        <div class="scanner-beam"></div>
+      </div>
+    </div>
+
+    <script>
+      setInterval(() => {
+        fetch("/check_trigger")
+          .then((response) => {
+            if (!response.ok) {
+              console.error(
+                "Failed to check trigger status:",
+                response.statusText
+              );
+            }
+            return response.json();
+          })
+          .then((data) => {
+            if (data.triggered) {
+              window.location.href = "/capture";
+            }
+          })
+          .catch((error) => {
+            console.error("Error during fetch:", error);
+          });
+      }, 1000); // 2000
+    </script>
+  </body>
+</html>

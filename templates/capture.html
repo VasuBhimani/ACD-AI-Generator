@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Avatar Capture</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --dark-purple: #1e0045;
+        --main-purple: #a267ff;
+        --light-purple: #d4b9fe;
+        --light-blue: #cae9ee;
+        --accent-orange: #ff6222;
+        --accent-lime: #e4ff7a;
+        --scan-color: #00bfff;
+        --lock-color: #39ff14;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: "Rajdhani", sans-serif;
+        background-color: var(--dark-purple);
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        overflow: hidden;
+      }
+
+      /* --- VIDEO & BACKGROUND --- */
+      #video {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        object-fit: cover;
+        transform: scaleX(-1);
+        z-index: 1;
+      }
+
+      .background-wrapper {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+        pointer-events: none;
+        overflow: hidden;
+        z-index: 0;
+        background-image: linear-gradient(135deg, var(--dark-purple), #4a288a);
+      }
+
+      #particle-grid {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 0;
+      }
+
+      /* --- HUD OVERLAY --- */
+      .overlay-hud {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 10;
+        pointer-events: none;
+      }
+
+      .hud-top {
+        position: absolute;
+        top: 0;
+        width: 100%;
+        padding: 15px 0;
+        text-align: center;
+        background: linear-gradient(
+          to bottom,
+          rgba(30, 0, 69, 0.7),
+          transparent
+        );
+        border-top: 1px solid rgba(162, 103, 255, 0.4);
+        backdrop-filter: blur(5px);
+        -webkit-backdrop-filter: blur(5px);
+      }
+
+      .hud-info {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 20px;
+      }
+
+      #status {
+        font-size: 1.5em;
+        font-weight: 500;
+        color: var(--light-blue);
+        letter-spacing: 1px;
+      }
+
+      #timer {
+        font-size: 1.6em;
+        font-weight: 700;
+        color: var(--accent-lime);
+        text-shadow: 0 0 8px var(--accent-lime);
+        min-width: 30px;
+        transition: color 0.3s ease, text-shadow 0.3s ease;
+      }
+
+      #timer.final-countdown {
+        color: var(--accent-orange);
+        text-shadow: 0 0 8px var(--accent-orange);
+      }
+
+      .corner {
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        border-style: solid;
+        border-color: var(--main-purple);
+        opacity: 0.7;
+        transition: all 0.5s ease;
+      }
+      .top-left {
+        top: 20px;
+        left: 20px;
+        border-width: 2px 0 0 2px;
+      }
+      .top-right {
+        top: 20px;
+        right: 20px;
+        border-width: 2px 2px 0 0;
+      }
+      .bottom-left {
+        bottom: 20px;
+        left: 20px;
+        border-width: 0 0 2px 2px;
+      }
+      .bottom-right {
+        bottom: 20px;
+        right: 20px;
+        border-width: 0 2px 2px 0;
+      }
+
+      /* --- Face Detection Overlay --- */
+      .face-overlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 250px;
+        height: 320px;
+        transform: translate(-50%, -50%);
+        transition: all 0.5s ease;
+      }
+      .face-bracket {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        border-style: solid;
+        border-color: var(--scan-color);
+        opacity: 0;
+        transition: all 0.5s ease;
+        animation: search-pulse 3s infinite ease-in-out;
+      }
+      .face-overlay.locked .face-bracket {
+        border-color: var(--lock-color);
+        animation: none;
+        box-shadow: 0 0 15px var(--lock-color);
+      }
+      .face-overlay.detected .face-bracket {
+        opacity: 1;
+      }
+      .fb-top-left {
+        top: 0;
+        left: 0;
+        border-width: 3px 0 0 3px;
+      }
+      .fb-top-right {
+        top: 0;
+        right: 0;
+        border-width: 3px 3px 0 0;
+      }
+      .fb-bottom-left {
+        bottom: 0;
+        left: 0;
+        border-width: 0 0 3px 3px;
+      }
+      .fb-bottom-right {
+        bottom: 0;
+        right: 0;
+        border-width: 0 3px 3px 0;
+      }
+
+      @keyframes search-pulse {
+        50% {
+          border-color: var(--light-blue);
+          opacity: 0.7;
+        }
+      }
+
+      /* --- Vertical Scanline --- */
+      .scanline {
+        position: absolute;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background: linear-gradient(
+          to bottom,
+          transparent,
+          var(--main-purple),
+          transparent
+        );
+        opacity: 0.3;
+        animation: vertical-scan 8s linear infinite;
+        z-index: 2;
+      }
+      @keyframes vertical-scan {
+        from {
+          top: -10%;
+        }
+        to {
+          top: 110%;
+        }
+      }
+
+      /* --- GLITCH & OTHER ELEMENTS --- */
+      #canvas {
+        display: none;
+      }
+      #flash {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: white;
+        opacity: 0;
+        pointer-events: none;
+        z-index: 20;
+        transition: opacity 0.1s;
+      }
+      body.glitch-active #video {
+        animation: video-glitch 0.3s forwards;
+      }
+      @keyframes video-glitch {
+        0%,
+        100% {
+          transform: scaleX(-1) translateX(0);
+        }
+        33% {
+          transform: scaleX(-1) translateX(-4px) skewX(1deg);
+        }
+        66% {
+          transform: scaleX(-1) translateX(4px) skewX(-1deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="background-wrapper">
+      <canvas id="particle-grid"></canvas>
+    </div>
+
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+    <div id="flash"></div>
+
+    <div class="overlay-hud">
+      <div class="scanline"></div>
+      <div class="hud-top">
+        <div class="hud-info">
+          <div id="status">Initializing Camera...</div>
+          <div id="timer"></div>
+        </div>
+      </div>
+
+      <div class="face-overlay">
+        <div class="face-bracket fb-top-left"></div>
+        <div class="face-bracket fb-top-right"></div>
+        <div class="face-bracket fb-bottom-left"></div>
+        <div class="face-bracket fb-bottom-right"></div>
+      </div>
+
+      <div class="corner top-left"></div>
+      <div class="corner top-right"></div>
+      <div class="corner bottom-left"></div>
+      <div class="corner bottom-right"></div>
+    </div>
+
+    <script>
+      const config = {
+        totalCountdown:5,
+      };
+
+      class AIVisionCapture {
+        constructor(userName, config) {
+          this.video = document.getElementById("video");
+          this.canvas = document.getElementById("canvas");
+          this.ctx = this.canvas.getContext("2d");
+          this.statusEl = document.getElementById("status");
+          this.timerEl = document.getElementById("timer");
+          this.flashEl = document.getElementById("flash");
+          this.faceOverlay = document.querySelector(".face-overlay");
+          this.particleCanvas = document.getElementById("particle-grid");
+          this.particleCtx = this.particleCanvas.getContext("2d");
+
+          this.config = config;
+          this.countdown = this.config.totalCountdown;
+          this.userName = userName || "User";
+          this.stream = null;
+        }
+
+        init() {
+          this.setupParticleGrid();
+          this.animateParticles();
+          this.startCamera();
+        }
+
+        setupParticleGrid() {
+          this.particleCanvas.width = window.innerWidth;
+          this.particleCanvas.height = window.innerHeight;
+          this.particles = [];
+          const particleCount = 100;
+          for (let i = 0; i < particleCount; i++) {
+            this.particles.push({
+              x: Math.random() * this.particleCanvas.width,
+              y: Math.random() * this.particleCanvas.height,
+              radius: Math.random() * 1.5 + 0.5,
+              opacity: Math.random() * 0.5 + 0.2,
+            });
+          }
+        }
+
+        animateParticles() {
+          this.particleCtx.clearRect(
+            0,
+            0,
+            this.particleCanvas.width,
+            this.particleCanvas.height
+          );
+          this.particles.forEach((p) => {
+            p.opacity += (Math.random() - 0.5) * 0.01;
+            if (p.opacity < 0.2) p.opacity = 0.2;
+            if (p.opacity > 0.7) p.opacity = 0.7;
+
+            this.particleCtx.beginPath();
+            this.particleCtx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+            this.particleCtx.fillStyle = `rgba(162, 103, 255, ${p.opacity})`;
+            this.particleCtx.fill();
+          });
+          requestAnimationFrame(() => this.animateParticles());
+        }
+
+        startCamera() {
+          navigator.mediaDevices
+            .getUserMedia({
+              video: {
+                width: { ideal: 1920 },
+                height: { ideal: 1080 },
+                facingMode: "user",
+              },
+              audio: false,
+            })
+            .then((stream) => {
+              this.stream = stream;
+              this.video.srcObject = stream;
+              this.statusEl.textContent = `Hello ${this.userName}, Prepare for Capture`;
+              this.startMainCountdown();
+            })
+            .catch((err) => {
+              this.statusEl.textContent = "Camera Error: " + err.message;
+              setTimeout(() => (location.href = "/"), 3000);
+            });
+        }
+
+        startMainCountdown() {
+          console.log("Countdown is starting at:", this.countdown);
+          this.timerEl.textContent = this.countdown;
+
+          const interval = setInterval(() => {
+            this.countdown--;
+            this.timerEl.textContent = this.countdown;
+
+            // --- Trigger events during the final seconds ---
+            if (this.countdown === 3) {
+              this.faceOverlay.classList.add("detected");
+              this.statusEl.textContent = "Biometric Signature Detected...";
+            }
+
+            if (this.countdown === 2) {
+              this.faceOverlay.classList.add("locked");
+              this.statusEl.textContent = "Lock Confirmed...";
+            }
+
+            if (this.countdown === 1) {
+              this.timerEl.classList.add("final-countdown");
+              document.body.classList.add("glitch-active");
+            }
+
+            if (this.countdown <= 0) {
+              clearInterval(interval);
+              this.takePhoto();
+            }
+          }, 1000);
+        }
+
+        takePhoto() {
+          this.canvas.width = this.video.videoWidth;
+          this.canvas.height = this.video.videoHeight;
+          this.flashEl.style.opacity = 1;
+          document.querySelector(".overlay-hud").style.display = "none";
+          document.body.classList.remove("glitch-active");
+
+          setTimeout(() => {
+            this.ctx.translate(this.canvas.width, 0);
+            this.ctx.scale(-1, 1);
+            this.ctx.drawImage(
+              this.video,
+              0,
+              0,
+              this.canvas.width,
+              this.canvas.height
+            );
+            this.stopStream();
+
+            this.canvas.toBlob(
+              (blob) => {
+                const formData = new FormData();
+                formData.append("image", blob, "photo.jpg");
+                fetch("/save_photo", { method: "POST", body: formData }).catch(
+                  (err) => console.log("Upload error:", err)
+                );
+
+                setTimeout(() => {
+                  this.flashEl.style.opacity = 0;
+                  location.href = "/processing";
+                }, 150); // changwe this for white screen
+              },
+              "image/jpeg",
+              0.95
+            );
+          }, 50); // changwe this for white screen
+        }
+
+        stopStream() {
+          if (this.stream) {
+            this.stream.getTracks().forEach((track) => track.stop());
+          }
+        }
+      }
+
+      // Initialize the capture process with the config
+      const capture = new AIVisionCapture("{{ name }}", config);
+      capture.init();
+    </script>
+  </body>
+</html>
