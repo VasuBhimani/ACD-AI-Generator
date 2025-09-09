@@ -3,3 +3,7 @@ Requests==2.32.5
 boto3
 Flask-Mail
 Pillow
+gunicorn
+mysql_connector_repackaged==0.3.1
+python-dotenv
+mysql-connector-python>=8.0

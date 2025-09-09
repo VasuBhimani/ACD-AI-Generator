@@ -1,5 +1,10 @@
 generated/**
 photos/**
+framed/**
+global-bundle.pem
+test.py
+
+
 __pycache__/
 *.pyc
 *.pyo

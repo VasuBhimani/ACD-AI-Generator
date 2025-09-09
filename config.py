@@ -1,13 +1,14 @@
 import os
-
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
     'port': int(os.getenv('DB_PORT', 3306)),
     'user': os.getenv('DB_USER', 'root'),
     'password': os.getenv('DB_PASSWORD', 'root'),
-    'database': os.getenv('DB_NAME','qr_scanner'),
+    'database': os.getenv('DB_NAME'),
     'charset': 'utf8mb4',
-    'autocommit': True
+    'autocommit': True,
+    'ssl_ca': os.path.join(BASE_DIR, "global-bundle.pem")
 }
 
 
@@ -17,7 +18,7 @@ MAIL_SERVER = 'smtp.gmail.com'
 MAIL_PORT = 587
 MAIL_USE_TLS = True
 MAIL_USE_SSL = False
-
+MAIL_DEFAULT_SENDER = 'bhimanivasu93@gmail.com'
 
 
 
