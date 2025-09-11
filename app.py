@@ -11,7 +11,10 @@ from mysql.connector import pooling, Error
 from config import DB_CONFIG 
 from flask_mail import Mail, Message
 from PIL import Image 
-
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+import cv2  
+import numpy as np
 
 app = Flask(__name__)
 app.config.from_pyfile('config.py')
@@ -41,6 +44,25 @@ app.secret_key = "fast-app"
 os.makedirs("generated", exist_ok=True)
 os.makedirs("photos", exist_ok=True)
 os.makedirs("framed", exist_ok=True)
+
+# --- ADD THIS ENTIRE BLOCK HERE ---
+# This pre-loads the frame and calculates ratios ONCE on startup for max performance.
+try:
+    FRAME_PATH = os.path.join("static", "frames", "frameM.png")
+    FRAME_IMAGE_CV = cv2.imread(FRAME_PATH, cv2.IMREAD_UNCHANGED)
+    if FRAME_IMAGE_CV is None:
+        raise FileNotFoundError(f"Frame not found at {FRAME_PATH}")
+    
+    ORIGINAL_FRAME_H, ORIGINAL_FRAME_W, _ = FRAME_IMAGE_CV.shape
+    
+    LEFT_MARGIN_RATIO = 800 / ORIGINAL_FRAME_W
+    TOP_MARGIN_RATIO = 800 / ORIGINAL_FRAME_H
+    print("✅ Frame image pre-loaded successfully.")
+
+except Exception as e:
+    print(f"❌ FATAL ERROR: Could not load the frame image. App may not function correctly. Error: {e}")
+    FRAME_IMAGE_CV = None
+# --- END OF BLOCK TO ADD ---
 
 # Global state
 trigger_capture = False
@@ -136,7 +158,16 @@ def save_photo():
 
         with open(filepath, "rb") as img_file:
             files = {"face_image": (filename, img_file, image.mimetype)}
-            data = { "guidance_scale": "1.5", "prompt": "a person", "enhance_face_region": "false", "identitynet_strength_ratio": "0.8", "negative_prompt": "", "num_steps": "20", "seed": "0", "style_name": "Spring Festival", "enable_LCM": "true", "adapter_strength_ratio": "0.8" }
+            data = { "guidance_scale": "1.5", 
+                    "prompt": "young adult, youthful, clear skin, smooth face, symmetrical features, attractive, photorealistic, detailed, natural, sharp features, well-lit, realistic", 
+                    "enhance_face_region": "true", 
+                    "identitynet_strength_ratio": "0.8", 
+                    "negative_prompt": "old, elderly, aged, wrinkled skin, sagging skin, gray hair, balding, unattractive, ugly, deformed, distorted face, asymmetrical face, mutated, disfigured, poorly drawn face, extra eyes, extra teeth, malformed, grotesque, unrealistic face, bad anatomy, low quality", 
+                    "num_steps": "20", 
+                    "seed": "0", 
+                    "style_name": "Snow", 
+                    "enable_LCM": "true", 
+                    "adapter_strength_ratio": "0.8" }
             response = requests.post(api_url, data=data, files=files)
 
         if response.ok and "image" in response.headers.get("Content-Type", ""):
@@ -159,61 +190,125 @@ def save_photo():
     
 
 #-------------------------------------------MASTER FUNCTION------------------------------------
-def email_db_update(capture_user_id,capture_user_email,capture_name,latest_generated_path):
+def email_db_update(capture_user_id, capture_user_email, capture_name, latest_generated_path):
     print("email_db_update function called")
     global wrapup
-    # global wrapup, capture_user_id,capture_user_email,capture_name,latest_generated_path
-    
-    print(capture_user_email)
-    print(capture_name)
-    print(latest_generated_path)
-    
-    framed_filename = f"framed_{datetime.now():%Y%m%d_%H%M%S}.jpeg"
-    framed_path = os.path.join("framed", framed_filename)
-    outout_path = merge_images_exact_fit(latest_generated_path, framed_path)
-    
-    send_designer_email(capture_user_email, capture_name, outout_path)
-    
-    if capture_user_id:
-        print(f"Attempting to update flag for user ID: {capture_user_id}")
-        success = update_user_flag_in_db(capture_user_id)
-        if not success:
-            print(f"Warning: Failed to update database flag for user_id {capture_user_id}.")
-            capture_user_id = None
-        else:
-            print("DONE : database updated")
-            
-    send_webhook()
+
+    # --- Stage 1: Image merge and DB update ---
+    def merge_worker():
+        framed_filename = f"framed_{datetime.now():%Y%m%d_%H%M%S}.jpeg"
+        framed_path = os.path.join("framed", framed_filename)
+        output_path =  output_path = create_framed_image(
+            latest_generated_path, 
+            framed_path, 
+            # output_size=(1920, 1280), # or None to use original size
+            output_size=None,
+            jpeg_quality=80
+        )
+        return output_path
+
+    stage1_results = {}
+
+    def db_worker():
+        if capture_user_id:
+            print(f"Attempting to update flag for user ID: {capture_user_id}")
+            success = update_user_flag_in_db(capture_user_id)
+            if not success:
+                print(f"Warning: Failed to update database flag for user_id {capture_user_id}.")
+            else:
+                print("DONE : database updated")
+
+    # Start Stage 1 threads
+    merge_thread = threading.Thread(target=lambda: stage1_results.update({"outout_path": merge_worker()}))
+    db_thread = threading.Thread(target=db_worker)
+
+    merge_thread.start()
+    db_thread.start()
+
+    merge_thread.join()
+    db_thread.join()
+
+    # --- Stage 2: Webhook + Email (email fire-and-forget) ---
+    outout_path = stage1_results["outout_path"]
+
+    def email_worker():
+        try:
+            send_designer_email(capture_user_email, capture_name, outout_path)
+            print("✅ Email sent in background")
+        except Exception as e:
+            print(f"⚠️ Email sending failed: {e}")
+
+    def webhook_worker():
+        try:
+            send_webhook()
+            print("✅ Webhook sent")
+        except Exception as e:
+            print(f"⚠️ Webhook failed: {e}")
+
+    # Start Stage 2 threads
+    threading.Thread(target=email_worker, daemon=True).start()  # fire-and-forget
+    webhook_thread = threading.Thread(target=webhook_worker)
+    webhook_thread.start()
+
+    # Wait only for webhook to finish
+    webhook_thread.join()
+
+    # Mark wrapup after Stage 2 starts (email may still be running)
     wrapup = False
+    print("✅ wrapup set to False (email still sending in background)")
 
-#-------------------------------------FRAME FUNCTION-----------------------------------------------
 
-def merge_images_exact_fit(photo_path, output_path):
-    FRAME_PATH = os.path.join("static", "frames", "frameM.png")
-    
-    # Open frame and generated photo
-    frame = Image.open(FRAME_PATH).convert("RGBA")
-    photo = Image.open(photo_path).convert("RGBA")
-    # Frame size
-    frame_w, frame_h = frame.size  # (4808, 3125)
-    # Margins (adjust as per your requirement)
-    # Margins 
-    left_margin, right_margin = 800, 800 
-    top_margin, bottom_margin = 800, 800
-    # Inner area size
-    inner_w = frame_w - (left_margin + right_margin)
-    inner_h = frame_h - (top_margin + bottom_margin)
-    # Resize photo to exact inner size
-    photo_resized = photo.resize((inner_w, inner_h), Image.LANCZOS)
-    # Paste resized photo into frame
-    frame.paste(photo_resized, (left_margin, top_margin), photo_resized)
-    # Save final framed image
-    
-    frame_rgb = frame.convert("RGB")  # Convert from RGBA to RGB
-    frame_rgb.save(output_path, "JPEG", quality=90, optimize=True, progressive=True)
+#-------------------------------------FRAME FUNCTION (OPTIMIZED)-----------------------------------
 
-    print(f"✅ Framed image saved as {output_path}")
-    return output_path
+def create_framed_image(photo_path, output_path, output_size=None, jpeg_quality=90):
+    """
+    The fastest way to frame a single photo with full control over size and quality.
+    """
+    if FRAME_IMAGE_CV is None:
+        print("Error: Frame image is not loaded. Cannot process photo.")
+        return None
+
+    try:
+        if output_size:
+            target_w, target_h = output_size
+            frame_resized = cv2.resize(FRAME_IMAGE_CV, (target_w, target_h), interpolation=cv2.INTER_AREA)
+        else:
+            frame_resized = FRAME_IMAGE_CV.copy()
+        
+        frame_h, frame_w, _ = frame_resized.shape
+
+        left_margin = int(frame_w * LEFT_MARGIN_RATIO)
+        top_margin = int(frame_h * TOP_MARGIN_RATIO)
+        inner_w = frame_w - (2 * left_margin)
+        inner_h = frame_h - (2 * top_margin)
+
+        if inner_w <= 0 or inner_h <= 0:
+            return None
+
+        photo = cv2.imread(photo_path, cv2.IMREAD_UNCHANGED)
+        if photo.shape[2] == 3:
+            photo = cv2.cvtColor(photo, cv2.COLOR_BGR2BGRA)
+        photo_resized = cv2.resize(photo, (inner_w, inner_h), interpolation=cv2.INTER_AREA)
+
+        y1, y2 = top_margin, top_margin + inner_h
+        x1, x2 = left_margin, left_margin + inner_w
+        
+        alpha = photo_resized[:, :, 3] / 255.0
+        inv_alpha = 1.0 - alpha
+        
+        for c in range(0, 3):
+            frame_resized[y1:y2, x1:x2, c] = (alpha * photo_resized[:, :, c] +
+                                              inv_alpha * frame_resized[y1:y2, x1:x2, c])
+
+        final_image_bgr = cv2.cvtColor(frame_resized, cv2.COLOR_BGRA2BGR)
+        cv2.imwrite(output_path, final_image_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality])
+        
+        print(f"✅ Framed image saved as {output_path}")
+        return output_path
+
+    except Exception as e:
+        print(f"❌ Failed to process {photo_path}. Error: {e}")
+        return None
 
 #----------------------------------------EMAIL FUNCTION----------------------------------------------
 mail = Mail(app)

@@ -3,6 +3,7 @@ photos/**
 framed/**
 global-bundle.pem
 test.py
+test1.py
 
 
 __pycache__/
