@@ -279,7 +279,7 @@
               const timeoutId = setTimeout(() => {
                 document.removeEventListener("keydown", handleEnterKey); // Clean up listener
                 window.location.href = "/";
-              }, 6000); // 6 seconds
+              }, 10000); // 6 seconds
 
               // Listen for key presses
               document.addEventListener("keydown", handleEnterKey);
@@ -292,7 +292,7 @@
         clearInterval(interval);
         // Redirect to the loading page
         window.location.href = "/processing_timeout";
-      }, 20000); // 10 seconds
+      }, 60000); // 10 seconds
     </script>
   </body>
 </html>

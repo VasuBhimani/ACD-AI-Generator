@@ -1,3 +1,4 @@
+import random
 import threading
 from dotenv import load_dotenv
 load_dotenv() 
@@ -27,7 +28,7 @@ try:
     )
     print("✅ Database connection pool created successfully.")
 except Error as e:
-    print(f"❌ Error creating database connection pool: {e}")
+    print(f" Error creating database connection pool: {e}")
     connection_pool = None
 
 def get_db_connection():
@@ -35,7 +36,7 @@ def get_db_connection():
         try:
             return connection_pool.get_connection()
         except Error as e:
-            print(f"❌ Could not get a connection from the pool: {e}")
+            print(f" Could not get a connection from the pool: {e}")
             return None
     return None
 
@@ -45,10 +46,9 @@ os.makedirs("generated", exist_ok=True)
 os.makedirs("photos", exist_ok=True)
 os.makedirs("framed", exist_ok=True)
 
-# --- ADD THIS ENTIRE BLOCK HERE ---
-# This pre-loads the frame and calculates ratios ONCE on startup for max performance.
+
 try:
-    FRAME_PATH = os.path.join("static", "frames", "frameM.png")
+    FRAME_PATH = os.path.join("static", "frames", "FrameM.png")
     FRAME_IMAGE_CV = cv2.imread(FRAME_PATH, cv2.IMREAD_UNCHANGED)
     if FRAME_IMAGE_CV is None:
         raise FileNotFoundError(f"Frame not found at {FRAME_PATH}")
@@ -60,7 +60,7 @@ try:
     print("✅ Frame image pre-loaded successfully.")
 
 except Exception as e:
-    print(f"❌ FATAL ERROR: Could not load the frame image. App may not function correctly. Error: {e}")
+    print(f" FATAL ERROR: Could not load the frame image. App may not function correctly. Error: {e}")
     FRAME_IMAGE_CV = None
 # --- END OF BLOCK TO ADD ---
 
@@ -73,8 +73,8 @@ latest_generated = None
 latest_generated_path = None 
 wrapup = False
 
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "http://localhost:5001/webhook")
-API_URL = os.getenv("API_URL", "https://05a2dbf47da0.ngrok-free.app/generate-image")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+API_URL = os.getenv("API_URL")
 
 
 @app.route("/")
@@ -122,28 +122,28 @@ def webhook():
 
 
 def update_user_flag_in_db(user_id):
-    query = "UPDATE users SET flag = FALSE WHERE id = %s"  # change this as per table name USERS
-
-    connection = get_db_connection()
-    if not connection:
-        print("Error: Could not connect to the database.")
-        return False
+    if user_id != "x0x0x0":
+        query = "UPDATE acddata SET flag = FALSE WHERE id = %s" 
+        connection = get_db_connection()
+        if not connection:
+            print("Error: Could not connect to the database.")
+            return False
+            
+        try:
+            cursor = connection.cursor()
+            cursor.execute(query, (user_id,))
+            connection.commit()
+            print(f"Successfully updated flag for user_id: {user_id}")
+            return True
+        except Error as e:
+            print(f"Error while updating data: {e}")
+            return False
+        finally:
         
-    try:
-        cursor = connection.cursor()
-        cursor.execute(query, (user_id,))
-        connection.commit()
-        print(f"Successfully updated flag for user_id: {user_id}")
-        return True
-    except Error as e:
-        print(f"Error while updating data: {e}")
-        return False
-    finally:
-    
-        if connection.is_connected():
-            cursor.close()
-            connection.close()
-            print("Database connection returned to the pool.")
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
+                print("Database connection returned to the pool.")
 
 
 @app.route("/save_photo", methods=["POST"])
@@ -157,17 +157,24 @@ def save_photo():
         api_url = API_URL
 
         with open(filepath, "rb") as img_file:
-            files = {"face_image": (filename, img_file, image.mimetype)}
-            data = { "guidance_scale": "1.5", 
-                    "prompt": "young adult, youthful, clear skin, smooth face, symmetrical features, attractive, photorealistic, detailed, natural, sharp features, well-lit, realistic", 
-                    "enhance_face_region": "true", 
-                    "identitynet_strength_ratio": "0.8", 
-                    "negative_prompt": "old, elderly, aged, wrinkled skin, sagging skin, gray hair, balding, unattractive, ugly, deformed, distorted face, asymmetrical face, mutated, disfigured, poorly drawn face, extra eyes, extra teeth, malformed, grotesque, unrealistic face, bad anatomy, low quality", 
-                    "num_steps": "20", 
-                    "seed": "0", 
-                    "style_name": "Snow", 
-                    "enable_LCM": "true", 
-                    "adapter_strength_ratio": "0.8" }
+            files = {"file": (filename, img_file, image.mimetype)}
+            # data = { "guidance_scale": "1.5", 
+            #         "prompt": positive, 
+            #         "enhance_face_region": "true", 
+            #         "identitynet_strength_ratio": "0.8", 
+            #         "negative_prompt": negative, 
+            #         "num_steps": "20", 
+            #         "seed": "0", 
+            #         "style_name": style, 
+            #         "enable_LCM": "true", 
+            #         "adapter_strength_ratio": "0.8" }
+            data = { "true_cfg_scale": 5,
+                    "num_inference_steps": 10,
+                    "negative_prompt": "",
+                    "prompt": "ghibili style, good looking, young, sticker, Background text: 'AWS' repeating through out the background, smiling",
+                    "seed":0}
+            
+            
             response = requests.post(api_url, data=data, files=files)
 
         if response.ok and "image" in response.headers.get("Content-Type", ""):
@@ -194,7 +201,6 @@ def email_db_update(capture_user_id, capture_user_email, capture_name, latest_ge
     print("email_db_update function called")
     global wrapup
 
-    # --- Stage 1: Image merge and DB update ---
     def merge_worker():
         framed_filename = f"framed_{datetime.now():%Y%m%d_%H%M%S}.jpeg"
         framed_path = os.path.join("framed", framed_filename)
@@ -218,7 +224,6 @@ def email_db_update(capture_user_id, capture_user_email, capture_name, latest_ge
             else:
                 print("DONE : database updated")
 
-    # Start Stage 1 threads
     merge_thread = threading.Thread(target=lambda: stage1_results.update({"outout_path": merge_worker()}))
     db_thread = threading.Thread(target=db_worker)
 
@@ -228,32 +233,27 @@ def email_db_update(capture_user_id, capture_user_email, capture_name, latest_ge
     merge_thread.join()
     db_thread.join()
 
-    # --- Stage 2: Webhook + Email (email fire-and-forget) ---
     outout_path = stage1_results["outout_path"]
 
     def email_worker():
         try:
             send_designer_email(capture_user_email, capture_name, outout_path)
-            print("✅ Email sent in background")
+            print(" Email sent in background")
         except Exception as e:
             print(f"⚠️ Email sending failed: {e}")
 
     def webhook_worker():
         try:
             send_webhook()
-            print("✅ Webhook sent")
+            print(" Webhook sent")
         except Exception as e:
-            print(f"⚠️ Webhook failed: {e}")
+            print(f" Webhook failed: {e}")
 
-    # Start Stage 2 threads
-    threading.Thread(target=email_worker, daemon=True).start()  # fire-and-forget
+    threading.Thread(target=email_worker, daemon=True).start()  
     webhook_thread = threading.Thread(target=webhook_worker)
     webhook_thread.start()
 
-    # Wait only for webhook to finish
     webhook_thread.join()
-
-    # Mark wrapup after Stage 2 starts (email may still be running)
     wrapup = False
     print("✅ wrapup set to False (email still sending in background)")
 
@@ -320,58 +320,130 @@ def send_designer_email(recipient_email, recipient_name, image_path):
     print("email functon--------------")
     subject = f"A Special Message for {recipient_name}! 💌"
 
-    # Define the HTML body for the email. This is your "designer frame".
-    # You can use f-strings to personalize it with the user's name or other data.
-    html_body = f"""
-    <html>
-      <head>
-        <style>
-          body {{ font-family: 'Arial', sans-serif; background-color: #f4f4f4; color: #333; }}
-          .container {{ max-width: 600px; margin: 20px auto; padding: 20px; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px; }}
-          h1 {{ color: #4a4a4a; }}
-          p {{ font-size: 16px; line-height: 1.5; }}
-          .footer {{ margin-top: 20px; font-size: 12px; color: #777; text-align: center; }}
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <h1>Hello, {recipient_name}!</h1>
-          <p>We've created something special just for you. Please see the attached image for your personalized design.</p>
-          <p>We hope you love it!</p>
-          <div class="footer">
-            <p>Sent with ❤️ from Your App</p>
-          </div>
-        </div>
-      </body>
-    </html>
-    """
+
+    html_body = f"""\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your AI Creation from AWS Community Day Vadodara</title>
+
+<style>
+  body, table, td, a {{
+      -webkit-text-size-adjust:100%;
+      -ms-text-size-adjust:100%;
+      mso-line-height-rule:exactly;
+      font-family: Arial, sans-serif;
+  }}
+  img {{
+      border:0; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic;
+  }}
+  table {{
+      border-collapse:collapse !important;
+  }}
+  a[x-apple-data-detectors] {{
+      color: inherit !important;
+      text-decoration: none !important;
+      font-size: inherit !important;
+      font-family: inherit !important;
+      font-weight: inherit !important;
+      line-height: inherit !important;
+  }}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
+</head>
+<body>
+<table width="100%" cellpadding="0" cellspacing="0" border="0" >
+<tr>
+<td align="center" style="padding:20px 0;">
+<table class="main-container" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#F0F0F0" style="border-radius:10px;overflow:hidden;">
+<tr>
+              <td
+                align="center"
+                style="padding: 0; background: none; height: 250px"
+              >
+                                <img
+                  src="https://acd-vadodara.s3.us-east-1.amazonaws.com/ss1.png"
+                  alt="AWS Community Day Vadodara 2025 Logo"
+                  class="img-fluid"
+                    style="
+              border-collapse: collapse;
+              max-width: 600px;
+            "
+                />
+              </td>
+</tr>
+
+<tr>
+<td style="padding:40px 30px;">
+<h1 class="dark-text-primary" style="text-align:center;margin:0 0 20px 0;">Hello, {recipient_name}!</h1>
+<p class="dark-text-primary" style="font-size:16px;line-height:1.5;text-align:center;margin:20px 0;">
+Thank you for visiting the <strong>AWS Community Day Vadodara</strong> and stopping by the <strong>🎨 Kala Bhavan Creators booth</strong>! We had a blast creating this unique AI-generated photo just for you.
+</p>
+<p class="dark-text-primary" style="font-size:16px;line-height:1.5;text-align:center;margin-bottom:20px;">
+Here is your special creation:
+</p>
+<div style="text-align:center;margin:20px 0;">
+<img src="cid:attached_image" alt="Your AI Generated Photo" style="max-width:100%;border:3px solid #8A4DFF;border-radius:8px;display:inline-block;" />
+</div>
+<div class="highlight-box">
+<strong>Long press on the image</strong> to save it to your device.
+</div>
+</td>
+</tr>
+
+<tr>
+<td align="center" class="main-container" style="background-color:#F0F0F0;padding:20px 30px 30px 30px;">
+<img src="https://acd-vadodara.s3.us-east-1.amazonaws.com/logo.png" alt="AWS User Group Vadodara Logo" width="150" style="display:block;border:0;margin:0 auto 20px auto;" />
+<h2 class="dark-text-primary" style="margin-top:0;margin-bottom:10px;">Stay Connected!</h2>
+<p class="dark-text-primary" style="margin:0 0 20px 0;font-size:15px;line-height:1.4;">
+Join our community of <strong>4,010+ members</strong> to learn, share, and network.
+</p>
+
+<!-- Button -->
+<div class="button-container" style="text-align:center;margin:0 auto;">
+<a href="https://meetup.com/aws-community-vadodara" target="_blank">Join on Meetup</a>
+</div>
+
+<p class="dark-text-secondary dark-border" style="font-size:12px;color:#555555;margin:30px 0 0 0;border-top:1px solid #dddddd;padding-top:20px;">
+AWS Community Day Vadodara 2025<br>
+This email was sent from the 🎨 Kala Bhavan Creators booth.
+</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>
+"""
 
     try:
-        # Create a Message object
         with app.app_context():
-            msg = Message(
-                subject=subject,
-                recipients=[recipient_email],
-                html=html_body
-            )
+            msg = Message(subject=subject, recipients=[recipient_email], html=html_body)
 
-        # Attach the image
-        # The 'with' statement ensures the file is properly closed after reading
+            
             with app.open_resource(image_path) as fp:
-                # The attach method needs: filename, content_type, and the file data
                 msg.attach(
                     filename=os.path.basename(image_path),
-                    content_type='image/jpeg', # Or 'image/jpeg' for .jpg files
-                    data=fp.read()
+                    content_type='image/jpeg',
+                    data=fp.read(),
+                    disposition="inline",
+                    headers={"Content-ID": "<attached_image>"}
                 )
 
-            # Send the email
             mail.send(msg)
             print(f"Email sent successfully to {recipient_email}")
             return True
 
     except Exception as e:
-        # Print the error for debugging purposes
+        print(f"Error sending email: {e}")
+        return False
+
+    except Exception as e:
+        
         print(f"Error sending email: {e}")
         return False
 
@@ -396,7 +468,7 @@ def check_generated():
     global latest_generated
     if latest_generated:
         filename = latest_generated
-        latest_generated = None  # reset after sending once
+        latest_generated = None  
         return jsonify(new_image=filename)
     return jsonify(new_image=None)
 
@@ -423,4 +495,4 @@ def recapture():
 
 
 if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port=5000)
+    app.run(debug=True, host="0.0.0.0", port=5000)
